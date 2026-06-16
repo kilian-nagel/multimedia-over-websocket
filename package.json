@@ -1,0 +1,25 @@
+{
+  "name": "multimedia-over-websocket",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kilian-nagel/multimedia-over-websocket.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kilian-nagel/multimedia-over-websocket/issues"
+  },
+  "homepage": "https://github.com/kilian-nagel/multimedia-over-websocket#readme",
+  "dependencies": {
+    "ws": "^8.21.0"
+  }
+}
