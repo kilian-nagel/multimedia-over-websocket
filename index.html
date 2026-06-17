@@ -143,6 +143,8 @@
     <span id="status-text">Connecting…</span>
   </header>
 
+  <video autoplay></video>
+      
   <div id="messages"></div>
 
   <div id="compose">
@@ -152,6 +154,49 @@
 </div>
 
 <script>
+  const CANDIDATES = [
+    "video/webm;codecs=av1,opus",
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/mp4;codecs=avc1,mp4a.40.2",
+  ];
+
+  function pickCodec() {
+    const supported = CANDIDATES.filter(c => MediaRecorder.isTypeSupported(c));
+    console.log("Supported codecs:", supported);
+    return supported[0] ?? "";
+  }
+
+  function startRecorder(stream, mimeType) {
+    const opts = mimeType ? { mimeType } : {};
+    const recorder = new MediaRecorder(stream, opts);
+
+    recorder.ondataavailable = async (e) => {
+      if (e.data.size === 0) return;
+      const buf = await e.data.arrayBuffer();
+      console.log(`[MediaRecorder] codec=${recorder.mimeType} chunk=${buf.byteLength} bytes`, buf);
+    };
+
+    recorder.start(1000);
+    console.log(`[MediaRecorder] started — mimeType="${recorder.mimeType}"`);
+    return recorder;
+  }
+
+  navigator.mediaDevices
+    .getUserMedia({ video: true, audio: true })
+    .then((localMediaStream) => {
+      const video = document.querySelector("video");
+      video.srcObject = localMediaStream;
+
+      console.log("Track settings:", localMediaStream.getVideoTracks()[0].getSettings());
+
+      const codec = pickCodec();
+      startRecorder(localMediaStream, codec);
+    })
+    .catch((error) => {
+      console.log("getUserMedia rejected:", error);
+    });
+
   const WS_URL = `ws://${location.hostname}:8080`;
 
   const dot        = document.getElementById("status-dot");
