@@ -9,6 +9,9 @@ const httpServer = http.createServer((req, res) => {
   if (req.url === "/" || req.url === "/index.html") {
     res.writeHead(200, { "Content-Type": "text/html" });
     fs.createReadStream(path.join(__dirname, "index.html")).pipe(res);
+  } else if(req.url === "/main.js") {
+    res.writeHead(200, { "Content-Type": "text/javascript" });
+    fs.createReadStream(path.join(__dirname, "main.js")).pipe(res);
   } else {
     res.writeHead(404);
     res.end("Not found");
