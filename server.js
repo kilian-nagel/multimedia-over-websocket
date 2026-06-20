@@ -28,11 +28,16 @@ wss.on("connection", (ws, req) => {
     let payload;
     try {
       payload = JSON.parse(data.toString());
-    } catch {
+    } catch { 
       return;
     }
 
-    console.log(`[${payload.username}] ${payload.text}`);
+    if(payload.data !== undefined){
+      let d = payload.data;
+      const type = Array.isArray(d) ? "array" : typeof d;
+      console.log("data type:", type, "| constructor:", d?.constructor?.name);
+    }
+    console.log(`username : [${payload.username}] text : ${payload.text} data: ${payload.data} messageType: ${payload.messageType}`);
 
     // Broadcast to every other connected client
     for (const client of wss.clients) {
