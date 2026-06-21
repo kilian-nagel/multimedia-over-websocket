@@ -1,4 +1,4 @@
-const remoteVideoEl = document.querySelector("#remote-video > source");
+const remoteVideoEl = document.querySelector("#remote-video");
 
 class MediaCapture {
   static CODECS = [
@@ -11,50 +11,54 @@ class MediaCapture {
   async start(videoEl, chat) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     videoEl.srcObject = stream;
-    console.log("Track settings:", stream.getVideoTracks()[0].getSettings());
 
     const mimeType = MediaCapture.CODECS.find(c => MediaRecorder.isTypeSupported(c)) ?? "";
-    console.log("Supported codecs:", MediaCapture.CODECS.filter(c => MediaRecorder.isTypeSupported(c)));
-
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
     recorder.ondataavailable = async (e) => {
       if (e.data.size === 0) return;
       const buf = await e.data.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      const b64 = bytesToStr(bytes);
-      chat.send({ messageType : 'video', data: b64});
-      console.log(`[MediaRecorder] codec=${recorder.mimeType} chunk=${buf.byteLength} bytes`, buf);
+      chat.send({ mimeType: recorder.mimeType, chunk: bytesToB64(new Uint8Array(buf)) });
     };
     recorder.start(1000);
-    console.log(`[MediaRecorder] started — mimeType="${recorder.mimeType}"`);
   }
 }
 
-function bytesToStr(bytes){
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  console.log("binary : ", binary);
-  const b64 = btoa(binary);
-  return b64;
+function bytesToB64(bytes) {
+  return btoa(Array.from(bytes, b => String.fromCharCode(b)).join(""));
 }
 
-function strToBytes(data){
-  let str = atob(data);
-  let bytes = [];
-  for(const [char,index] of str){
-    console.log("converting char(i) : ", index)
-    console.log(`char : ${char} -> ${str.charCodeAt(index)}`)
-    bytes.push(str.charCodeAt(index))
+function b64ToBuffer(b64) {
+  const str = atob(b64);
+  const bytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i);
+  return bytes.buffer;
+}
+
+class RemoteVideoPlayer {
+  #ms = null;
+  #sourceBuffer = null;
+  #queue = [];
+
+  constructor(videoEl) {
+    const ms = new MediaSource();
+    videoEl.src = URL.createObjectURL(ms);
+    ms.addEventListener("sourceopen", () => { this.#ms = ms; });
   }
-}
 
-function getEncodedVideoString(type, base64data) {
-   return 'data:video/' . type . ';base64,' . base64data;
-}
+  appendChunk(mimeType, b64) {
+    if (!this.#sourceBuffer) {
+      if (!this.#ms) return;
+      this.#sourceBuffer = this.#ms.addSourceBuffer(mimeType);
+      this.#sourceBuffer.addEventListener("updateend", () => this.#flush());
+    }
+    this.#queue.push(b64ToBuffer(b64));
+    this.#flush();
+  }
 
-function StreamRemoteVideo(base64data, remoteVideoEl){
-  console.log("stramining : ", base64data);
-  remoteVideoEl.src = base64data;
+  #flush() {
+    if (this.#sourceBuffer.updating || this.#queue.length === 0) return;
+    this.#sourceBuffer.appendBuffer(this.#queue.shift());
+  }
 }
 
 class ChatClient {
@@ -98,12 +102,11 @@ class ChatClient {
     this.#ws.addEventListener("message", (e) => {
       let payload;
       try { payload = JSON.parse(e.data); } catch { return; }
-      
-      console.log("received payload : ", payload);
-      if(payload?.messageType && payload.messageType === 'video'){
-        StreamRemoteVideo(getEncodedVideoString("webm", payload.data), remoteVideoEl);
-      } else {
-        this.#appendMessage(payload.username, payload.text, false);
+
+      if (payload?.type === "video") {
+        remotePlayer.appendChunk(payload.data.mimeType, payload.data.chunk);
+      } else if (payload?.type === "message") {
+        this.#appendMessage(payload.data.username, payload.data.text, false);
       }
     });
   }
@@ -112,17 +115,13 @@ class ChatClient {
     const text = this.#input.value.trim();
     if ((!data && !text) || this.#ws.readyState !== WebSocket.OPEN) return;
 
-    if(data){
-      console.log("sending video stream : ", data);
-      // Video stream
-      this.#ws.send(JSON.stringify({ messageType: "video", data: data }));
+    if (data) {
+      this.#ws.send(JSON.stringify({ type: "video", data: data }));
     } else {
-      console.log("sending message : ", text);
-      // Regular message
-      this.#ws.send(JSON.stringify({ username: this.#username, text: text }));
+      this.#ws.send(JSON.stringify({ type: "message", data: { username: this.#username, text: text } }));
+      this.#appendMessage(this.#username, text, true);
+      this.#input.value = "";
     }
-    this.#appendMessage(this.#username, text, true);
-    this.#input.value = "";
   }
 
   #appendMessage(user, text, mine) {
@@ -153,9 +152,9 @@ class ChatClient {
   }
 }
 
+const remotePlayer = new RemoteVideoPlayer(remoteVideoEl);
 const chat = new ChatClient(`ws://${location.hostname}:8080`);
 chat.connect();
 
 const media = new MediaCapture();
 media.start(document.querySelector("video"), chat).catch(err => console.log("getUserMedia rejected:", err));
-

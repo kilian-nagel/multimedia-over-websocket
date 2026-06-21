@@ -37,7 +37,7 @@ wss.on("connection", (ws, req) => {
       const type = Array.isArray(d) ? "array" : typeof d;
       console.log("data type:", type, "| constructor:", d?.constructor?.name);
     }
-    console.log(`username : [${payload.username}] text : ${payload.text} data: ${payload.data} messageType: ${payload.messageType}`);
+    console.log(`type: [${payload.type}] data: ${JSON.stringify(payload.data)}`);
 
     // Broadcast to every other connected client
     for (const client of wss.clients) {
